@@ -25,7 +25,7 @@ func ToText(filename string, width int, chars []rune) string {
 		width = w
 	}
 	var res_height = int(float64(width) / (scale + 1))
-	data = transform.Resize(data, width, res_height, transform.NearestNeighbor)
+	data = transform.Resize(data, width, res_height, transform.Gaussian)
 	if data == nil {
 		log.Fatalln("Can't resize image")
 	}
@@ -94,19 +94,19 @@ func main() {
 			&cli.StringFlag{
 				Name:  "chars",
 				Value: ".,^!&%$@",
-				Usage: "set your own `symbols` to print an image using them. They would be better ordered by 'brightness' or, simply put, an area they occupy within a text, from the lower to the higher values",
+				Usage: "set your own `symbols` to make an image using them. They would be better ordered by 'brightness' or, simply put, the size of area they occupy within the text, from the lower to the higher values",
 			},
 			&cli.StringFlag{
 				Name:        "outfile",
 				Value:       "",
-				Usage:       "specify filename to write text to `filename`",
+				Usage:       "specify `filename` in which the text should be written to",
 				DefaultText: "stdout",
 			},
 			&cli.IntFlag{
 				Name:        "width",
 				Value:       0,
 				DefaultText: "original size",
-				Usage:       "set result text line `length` (image scales to keep aspect ratio)",
+				Usage:       "set the text line `length` (the image scales to keep aspect ratio)",
 			},
 		},
 	}
