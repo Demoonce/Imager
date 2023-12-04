@@ -10,13 +10,18 @@ import (
 
 	"github.com/anthonynsimon/bild/imgio"
 	"github.com/anthonynsimon/bild/transform"
+	term "github.com/gookit/color"
 	cli "github.com/urfave/cli/v2"
 )
 
-func ToText(filename string, width int, chars []rune) string {
+// `.-~_,:!^+<>=;*/()?{}[]7123#4$5%980@
+// 712345908
+// `.-,:!^+<=*/(?{[#$%@
+
+func ToText(filename string, width int, chars []rune, color bool, use_gaussian bool) string {
 	data, err := imgio.Open(filename)
 	if err != nil {
-		log.Fatalln("Can't open this file")
+		log.Fatalln("Can't open this file", err)
 	}
 	w := data.Bounds().Dx()
 	h := data.Bounds().Dy()
@@ -25,12 +30,21 @@ func ToText(filename string, width int, chars []rune) string {
 		width = w
 	}
 	var res_height = int(float64(width) / (scale + 1))
-	data = transform.Resize(data, width, res_height, transform.Gaussian)
+	if use_gaussian {
+		data = transform.Resize(data, width, res_height, transform.Gaussian)
+	} else {
+		data = transform.Resize(data, width, res_height, transform.Linear)
+	}
+
 	if data == nil {
 		log.Fatalln("Can't resize image")
 	}
-	var result = make([]rune, 0, width*res_height+h)
+	var result string
 	var base int
+	var string_chars = make([]string, len(chars))
+	for a := range chars {
+		string_chars[a] = string(chars[a])
+	}
 	if 256%len(chars) == 0 {
 		base = 256 / len(chars)
 	} else {
@@ -40,21 +54,39 @@ func ToText(filename string, width int, chars []rune) string {
 		for b := 0; b < width; b++ {
 			r, g, b, _ := data.At(b, a).RGBA()
 			gray := int((r + g + b) / 768)
-			result = append(result, chars[int(gray/base)])
+			red, green, blue := uint8(r), uint8(g), uint8(b)
+			ch := string_chars[gray/base]
+			if color {
+				result += term.RGB(red, green, blue).Sprint(ch)
+			} else {
+				result += ch
+			}
 		}
-		result = append(result, '\n')
+		result += "\n"
 	}
-	return string(result)
+	return result
+}
+
+func CreateFile() {
 }
 
 func Execute(ctx *cli.Context) error {
-	results := []string{}
+	results := make([]string, 0)
 
 	str := []rune(ctx.String("chars"))
 	w := ctx.Int("width")
 	outfile := ctx.String("outfile")
-	for _, file := range ctx.Args().Slice() {
-		results = append(results, ToText(file, w, str))
+	color := ctx.Bool("color")
+	if outfile != "" && color {
+		fmt.Println("Can't use color with output files")
+		os.Exit(1)
+	}
+	if ctx.Args().Len() > 1 {
+		for _, file := range ctx.Args().Slice() {
+			results = append(results, ToText(file, w, str, color, false))
+		}
+	} else {
+		results = append(results, ToText(ctx.Args().Slice()[0], w, str, color, true))
 	}
 
 	if outfile == "" {
@@ -64,12 +96,18 @@ func Execute(ctx *cli.Context) error {
 	} else {
 		for n, res := range results {
 			var name, ext string
+			var file *os.File
+			var err error
 			split := strings.Split(outfile, ".")
 			if len(split) > 1 {
 				name = strings.Join(split[:len(split)-1], ".")
 				ext = split[len(split)-1]
 			}
-			file, err := os.Create(name + strconv.Itoa(n+1) + "." + ext)
+			if n == 0 {
+				file, err = os.Create(name + "." + ext)
+			} else {
+				file, err = os.Create(name + strconv.Itoa(n+1) + "." + ext)
+			}
 			if err != nil {
 				return err
 			}
@@ -107,6 +145,11 @@ func main() {
 				Value:       0,
 				DefaultText: "original size",
 				Usage:       "set the text line `length` (the image scales to keep aspect ratio)",
+			},
+			&cli.BoolFlag{
+				Name:  "color",
+				Value: false,
+				Usage: "set this flag to use colors (it's only supported with stdout output of course)",
 			},
 		},
 	}
